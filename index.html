@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>打刻処理中...</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f4f4f4; }
+        .loader { border: 5px solid #ccc; border-top: 5px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #status { margin-top: 20px; color: #555; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div style="text-align: center;">
+        <div class="loader"></div>
+        <div id="status">位置情報を取得しています...</div>
+    </div>
+
+    <script>
+        // --- 設定項目 ---
+        const LIFF_ID = 'あなたのLIFF_ID'; // 例: 2001234567-abcde123
+        const GAS_URL = 'あなたのGASウェブアプリURL';
+
+        async function main() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+
+                // GPSオプション（高精度を要求）
+                const gpsOptions = {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                };
+
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    document.getElementById('status').innerText = "データを送信中...";
+                    
+                    const payload = {
+                        idToken: liff.getIDToken(), // 改ざん不能な署名トークン
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                        type: new URLSearchParams(window.location.search).get('type')
+                    };
+
+                    // GASへ送信
+                    await fetch(GAS_URL, {
+                        method: 'POST',
+                        mode: 'no-cors', // CORSエラー回避（GAS側の制約）
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    // 送信完了。1秒待ってから閉じる
+                    setTimeout(() => { liff.closeWindow(); }, 1000);
+
+                }, (err) => {
+                    document.getElementById('status').innerText = "エラー: 位置情報を許可してください。";
+                    console.error(err);
+                }, gpsOptions);
+
+            } catch (err) {
+                document.getElementById('status').innerText = "初期化に失敗しました。";
+                console.error(err);
+            }
+        }
+        main();
+    </script>
+</body>
+</html>
