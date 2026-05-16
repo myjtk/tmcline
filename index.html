@@ -43,8 +43,8 @@
             if (liff.isInClient()) {
                 const type = new URLSearchParams(window.location.search).get('type');
                 const logMessage = response.status === "success" 
-                    ? `[SYSTEM_LOG] ${type}完了をWeb画面で確認しました。`
-                    : `[SYSTEM_LOG] ${type}エラー：${response.message.split('\n')[0]}`;
+                    ? `[SYSTEM_LOG] ${type}データを正常に送信しました。`
+                    : `[SYSTEM_LOG] ${type}データの送信に失敗しました。：${response.message.split('\n')[0]}`;
 
                 liff.sendMessages([{
                     type: 'text',
