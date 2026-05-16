@@ -21,8 +21,10 @@
     </div>
 
     <script>
-        // --- 設定項目 ---
-        const LIFF_ID = '2010090936-dfBp5Tkq'; // あなたのLIFF_ID
+        // ==========================================
+        // 設定項目
+        // ==========================================
+        const LIFF_ID = '2010090936-dfBp5Tkq';  // あなたのLIFF_ID
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbw_mD2DphIC4TvSFMjmyVwhnFKCgBhlfGBlv5MW5z2rnhg-TXnnS6ZGmTqVM7ASnlUYcQ/exec'; // あなたのGASウェブアプリURL
 
         // GAS（JSONP）からの結果を受け取るグローバル関数
@@ -33,12 +35,29 @@
 
             if (response.status === "success") {
                 statusEl.className = 'success-text';
-                statusEl.innerText = response.message;
-                // 成功時は2.5秒後に自動でLINEを閉じる
-                setTimeout(() => { liff.closeWindow(); }, 2500);
             } else {
                 statusEl.className = 'error-text';
-                statusEl.innerText = response.message;
+            }
+            statusEl.innerText = response.message;
+
+            // 【無料化＆ボタン消去対策】
+            // 成功・失敗問わず、ユーザー自身の口を借りてトーク画面に操作ログを自動送信
+            // ※プレフィックス「[SYSTEM_LOG]」を付与してGAS側での無限ループを完全防止
+            if (liff.isInClient()) {
+                const type = new URLSearchParams(window.location.search).get('type');
+                const logMessage = response.status === "success" 
+                    ? `[SYSTEM_LOG] ${type}完了をWeb画面で確認しました。`
+                    : `[SYSTEM_LOG] ${type}エラー：${response.message.split('\n')[0]}`;
+
+                liff.sendMessages([{
+                    type: 'text',
+                    text: logMessage
+                }]).catch((err) => console.error("メッセージ自動送信失敗", err));
+            }
+
+            // 成功時のみ、2.5秒後に自動でLINEを閉じる（失敗時はエラー文を確認させるため閉じない）
+            if (response.status === "success") {
+                setTimeout(() => { liff.closeWindow(); }, 2500);
             }
         }
 
@@ -58,7 +77,7 @@
                     const lng = position.coords.longitude;
                     const type = new URLSearchParams(window.location.search).get('type');
 
-                    // JSONP方式でGASにGETリクエストを送信（CORS制約を回避）
+                    // JSONP方式でGAS（doGet）にリクエストを送信（CORS制約の完全回避）
                     const script = document.createElement('script');
                     script.src = `${GAS_URL}?callback=handleResponse&idToken=${idToken}&latitude=${lat}&longitude=${lng}&type=${type}`;
                     document.body.appendChild(script);
