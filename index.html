@@ -9,12 +9,14 @@
         body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f4f4f4; }
         .loader { border: 5px solid #ccc; border-top: 5px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #status { margin-top: 20px; color: #555; font-weight: bold; }
+        #status { margin-top: 20px; color: #555; font-weight: bold; white-space: pre-wrap; text-align: center; line-height: 1.6; }
+        .error-text { color: #e74c3c !important; }
+        .success-text { color: #2ecc71 !important; }
     </style>
 </head>
 <body>
-    <div style="text-align: center;">
-        <div class="loader"></div>
+    <div style="text-align: center; padding: 20px;">
+        <div id="icon_loader" class="loader"></div>
         <div id="status">位置情報を取得しています...</div>
     </div>
 
@@ -23,51 +25,54 @@
         const LIFF_ID = '2010090936-dfBp5Tkq'; // あなたのLIFF_ID
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbw_mD2DphIC4TvSFMjmyVwhnFKCgBhlfGBlv5MW5z2rnhg-TXnnS6ZGmTqVM7ASnlUYcQ/exec'; // あなたのGASウェブアプリURL
 
+        // GAS（JSONP）からの結果を受け取るグローバル関数
+        function handleResponse(response) {
+            const statusEl = document.getElementById('status');
+            const loaderEl = document.getElementById('icon_loader');
+            loaderEl.style.display = 'none';
+
+            if (response.status === "success") {
+                statusEl.className = 'success-text';
+                statusEl.innerText = response.message;
+                // 成功時は2.5秒後に自動でLINEを閉じる
+                setTimeout(() => { liff.closeWindow(); }, 2500);
+            } else {
+                statusEl.className = 'error-text';
+                statusEl.innerText = response.message;
+            }
+        }
+
         async function main() {
+            const statusEl = document.getElementById('status');
+            const loaderEl = document.getElementById('icon_loader');
+
             try {
                 await liff.init({ liffId: LIFF_ID });
-                
-                if (!liff.isLoggedIn()) {
-                    liff.login();
-                    return;
-                }
-
-                // GPSオプション（高精度を要求）
-                const gpsOptions = {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0
-                };
+                if (!liff.isLoggedIn()) { liff.login(); return; }
 
                 navigator.geolocation.getCurrentPosition(async (position) => {
-                    document.getElementById('status').innerText = "データを送信中...";
-                    
-                    const payload = {
-                        idToken: liff.getIDToken(), // 改ざん不能な署名トークン
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude,
-                        type: new URLSearchParams(window.location.search).get('type')
-                    };
+                    statusEl.innerText = "サーバーで位置を検証中...";
 
-                    // GASへ送信
-                    await fetch(GAS_URL, {
-                        method: 'POST',
-                        mode: 'no-cors', // CORSエラー回避（GAS側の制約）
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
+                    const idToken = liff.getIDToken();
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    const type = new URLSearchParams(window.location.search).get('type');
 
-                    // 送信完了。1秒待ってから閉じる
-                    setTimeout(() => { liff.closeWindow(); }, 1000);
+                    // JSONP方式でGASにGETリクエストを送信（CORS制約を回避）
+                    const script = document.createElement('script');
+                    script.src = `${GAS_URL}?callback=handleResponse&idToken=${idToken}&latitude=${lat}&longitude=${lng}&type=${type}`;
+                    document.body.appendChild(script);
 
                 }, (err) => {
-                    document.getElementById('status').innerText = "エラー: 位置情報を許可してください。";
-                    console.error(err);
-                }, gpsOptions);
+                    loaderEl.style.display = 'none';
+                    statusEl.className = 'error-text';
+                    statusEl.innerText = "⚠️ エラー: 位置情報の取得を許可してください。";
+                }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
 
             } catch (err) {
-                document.getElementById('status').innerText = "初期化に失敗しました。";
-                console.error(err);
+                loaderEl.style.display = 'none';
+                statusEl.className = 'error-text';
+                statusEl.innerText = "初期化に失敗しました。";
             }
         }
         main();
